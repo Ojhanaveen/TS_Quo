@@ -109,7 +109,9 @@ python scripts/run_pipeline.py   # analyze + plot data/processed/
   size.
 
 Full design rationale and the 10x-scale plan are in
-[docs/TECHNICAL_APPROACH.md](docs/TECHNICAL_APPROACH.md).
+[docs/TECHNICAL_APPROACH.md](docs/TECHNICAL_APPROACH.md). Directions this
+could grow in beyond the assignment's scope, with honest trade-offs for
+each, are in [docs/FUTURE_ENHANCEMENTS.md](docs/FUTURE_ENHANCEMENTS.md).
 
 ## Verified against a real X account
 
