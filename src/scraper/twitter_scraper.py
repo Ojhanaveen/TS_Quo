@@ -80,6 +80,21 @@ def _parse_engagement_count(text: str) -> int:
     return int(float(value) * ENGAGEMENT_SUFFIX.get(suffix, 1))
 
 
+def _parse_aria_label_count(aria_label: str) -> int:
+    """X's action buttons expose their count via aria-label, e.g.
+    "1.2K Likes. Like" or "23 Reposts. Repost" -- "Like" alone (no leading
+    number) means a genuine zero count, not a parsing failure."""
+    aria_label = (aria_label or "").strip()
+    if not aria_label:
+        return 0
+    match = re.match(r"^([\d,.]+)\s*([KMB]?)\b", aria_label, re.IGNORECASE)
+    if not match:
+        return 0
+    value, suffix = match.groups()
+    value = value.replace(",", "")
+    return int(float(value) * ENGAGEMENT_SUFFIX.get(suffix.upper(), 1))
+
+
 def extract_hashtags(text: str) -> list:
     return [h.lower() for h in HASHTAG_RE.findall(text or "")]
 
@@ -211,11 +226,16 @@ class XSearchScraper:
 
             def _count(css: str) -> int:
                 try:
-                    return _parse_engagement_count(
-                        article.find_element(By.CSS_SELECTOR, css).text
-                    )
+                    el = article.find_element(By.CSS_SELECTOR, css)
                 except (NoSuchElementException, StaleElementReferenceException):
                     return 0
+                aria_count = _parse_aria_label_count(el.get_attribute("aria-label"))
+                if aria_count:
+                    return aria_count
+                # aria-label parsed to 0 -- could be genuinely zero, or the
+                # label format changed. Fall back to visible text as a
+                # second signal before trusting the zero.
+                return _parse_engagement_count(el.text)
 
             return RawTweet(
                 tweet_id=tweet_id,
