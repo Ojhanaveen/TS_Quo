@@ -5,6 +5,13 @@ engagement ints even better) and predicate pushdown for downstream
 analysis (e.g. "read only 2026-08-04/nifty50" without touching other
 partitions) -- important once volume grows past what fits comfortably
 in memory (see the 10x scalability note in docs/TECHNICAL_APPROACH.md).
+
+All reads pass ``partitioning=None``: pyarrow's default ("hive") treats
+any "key=value" path segment -- including our "date=2026-08-04" directory
+name -- as a partition column and silently injects it back as a field on
+read, even for a single explicit file path. Left on, every read grows an
+extra phantom "date" column that isn't in ``SCHEMA`` and breaks strict
+schema comparisons downstream.
 """
 from dataclasses import asdict
 from pathlib import Path
@@ -50,19 +57,27 @@ class ParquetStorage:
             return None
 
         df = pd.DataFrame([asdict(t) for t in cleaned_tweets])
-        table = pa.Table.from_pandas(df, schema=SCHEMA, preserve_index=False)
 
         partition_dir = self.base_dir / f"date={partition_date}"
         partition_dir.mkdir(parents=True, exist_ok=True)
         out_path = partition_dir / "tweets.parquet"
 
         if out_path.exists():
-            existing = pq.read_table(out_path)
-            table = pa.concat_tables([existing, table])
-            # dedup on write in case of overlapping runs for the same day
-            df_combined = table.to_pandas().drop_duplicates(subset="tweet_id")
-            table = pa.Table.from_pandas(df_combined, schema=SCHEMA, preserve_index=False)
+            # Merge as pandas DataFrames, not pyarrow Tables: Parquet's
+            # on-disk list encoding renames the inner field of list columns
+            # (e.g. "item" -> "element") on round-trip, so a freshly built
+            # in-memory Table and one just read back from disk can carry
+            # subtly different schemas even though the data is identical.
+            # pa.concat_tables() enforces exact schema equality and throws
+            # on that mismatch; going through pandas + a single
+            # from_pandas(..., schema=SCHEMA) rebuild sidesteps it and
+            # re-normalizes to our canonical schema either way.
+            existing_df = pq.read_table(out_path, partitioning=None).to_pandas()
+            df = pd.concat([existing_df, df], ignore_index=True)
+            df = df.drop_duplicates(subset="tweet_id")
 
+        df = df[[f.name for f in SCHEMA]]  # drop any stray columns, enforce order
+        table = pa.Table.from_pandas(df, schema=SCHEMA, preserve_index=False)
         pq.write_table(table, out_path, compression="snappy")
         logger.info("Wrote %d rows to %s", table.num_rows, out_path)
         return out_path
@@ -71,11 +86,11 @@ class ParquetStorage:
         path = self.base_dir / f"date={partition_date}" / "tweets.parquet"
         if not path.exists():
             return pd.DataFrame()
-        return pq.read_table(path).to_pandas()
+        return pq.read_table(path, partitioning=None).to_pandas()
 
     def read_all(self) -> pd.DataFrame:
         parts = list(self.base_dir.glob("date=*/tweets.parquet"))
         if not parts:
             return pd.DataFrame()
-        tables = [pq.read_table(p) for p in parts]
+        tables = [pq.read_table(p, partitioning=None) for p in parts]
         return pa.concat_tables(tables).to_pandas()
