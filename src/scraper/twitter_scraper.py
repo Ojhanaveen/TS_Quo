@@ -29,7 +29,11 @@ from datetime import datetime, timezone
 from typing import Iterator, Optional
 
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    StaleElementReferenceException,
+    TimeoutException,
+)
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -168,7 +172,15 @@ class XSearchScraper:
             articles = self.driver.find_elements(By.CSS_SELECTOR, sel.X_TWEET_ARTICLE)
             new_this_pass = 0
             for article in articles:
-                tweet = self._parse_article(article, tag)
+                try:
+                    tweet = self._parse_article(article, tag)
+                except StaleElementReferenceException:
+                    # X virtualizes the feed: elements already off-screen get
+                    # detached from the DOM mid-scroll. Skip this one instead
+                    # of crashing the whole run -- it'll reappear (or a
+                    # near-duplicate will) on a later pass if it's still
+                    # in the loaded window.
+                    continue
                 if tweet and tweet.tweet_id not in seen_ids:
                     seen_ids.add(tweet.tweet_id)
                     new_this_pass += 1
@@ -202,7 +214,7 @@ class XSearchScraper:
                     return _parse_engagement_count(
                         article.find_element(By.CSS_SELECTOR, css).text
                     )
-                except NoSuchElementException:
+                except (NoSuchElementException, StaleElementReferenceException):
                     return 0
 
             return RawTweet(
@@ -218,7 +230,7 @@ class XSearchScraper:
                 source="x",
                 search_hashtag=tag,
             )
-        except (NoSuchElementException, IndexError):
+        except (NoSuchElementException, StaleElementReferenceException, IndexError):
             return None
 
     def close(self) -> None:
