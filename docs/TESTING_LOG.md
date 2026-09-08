@@ -184,3 +184,26 @@ root cause, the fix, and the recommended batched-collection approach to
 reach the full target are in
 [docs/FEASIBILITY.md](FEASIBILITY.md) -- that document is the direct
 answer to "can this system do the full assignment volume."
+
+### Bug 6 -- single-tweet windows reported a false zero-width confidence interval
+
+**Symptom:** re-running `run_pipeline.py` against the real data collected
+during the Bug 5 testing surfaced rows like
+`intraday, n_tweets=1, mean_sentiment=-1.0, ci_low=-1.0, ci_high=-1.0` --
+a confidently exact interval built from a single tweet.
+
+**Root cause:** `_weighted_mean_and_ci` estimated variance from the
+sample's own spread around its own mean. A single value has zero spread
+around itself by definition, so any one-tweet window produced `variance =
+0` and therefore a zero-width interval -- mathematically consistent, but
+statistically the wrong conclusion: one data point should show *high*
+uncertainty, not none.
+
+**Fix:** below an effective sample size of 2, fall back to a prior
+standard deviation (0.6, roughly the spread of a uniform distribution
+over the lexicon's [-1, 1] sentiment range) instead of the sample's own
+variance, and clip the resulting interval to [-1, 1]. Verified: the same
+row above now reports `ci_low=-1.0, ci_high=0.176` -- visibly wide, as a
+single tweet's sentiment should be treated. Two regression tests added in
+`tests/test_signal_generator.py` covering both the width and the bound
+clipping.

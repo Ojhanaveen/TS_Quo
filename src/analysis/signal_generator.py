@@ -66,13 +66,34 @@ def build_tfidf_matrix(texts: list, max_features: int = 2000):
     return matrix, vectorizer
 
 
-def _weighted_mean_and_ci(values: np.ndarray, weights: np.ndarray, z: float = 1.96):
+def _weighted_mean_and_ci(
+    values: np.ndarray,
+    weights: np.ndarray,
+    z: float = 1.96,
+    min_effective_n: float = 2.0,
+    prior_std: float = 0.6,
+):
+    """Weighted mean +/- CI, with a variance floor for tiny samples.
+
+    A window with one tweet has zero sample variance around its own value
+    -- that's a fact about the sample, not evidence of low uncertainty.
+    Using it directly gives a confidently wrong zero-width interval. Below
+    ``min_effective_n``, fall back to ``prior_std`` (an assumed standard
+    deviation for this lexicon's [-1, 1] sentiment score, roughly the std
+    of a uniform distribution over that range) so small samples report
+    visibly wide, honest intervals instead of false precision.
+    """
     weights = np.where(weights <= 0, 1, weights)  # avoid zero-weight edge case
     mean = np.average(values, weights=weights)
-    variance = np.average((values - mean) ** 2, weights=weights)
     n_eff = (weights.sum() ** 2) / (weights**2).sum()  # effective sample size
-    se = np.sqrt(variance / max(n_eff, 1))
-    return mean, mean - z * se, mean + z * se
+    if n_eff < min_effective_n:
+        se = prior_std / np.sqrt(max(n_eff, 1))
+    else:
+        variance = np.average((values - mean) ** 2, weights=weights)
+        se = np.sqrt(variance / n_eff)
+    lo = max(mean - z * se, -1.0)
+    hi = min(mean + z * se, 1.0)
+    return mean, lo, hi
 
 
 def aggregate_signals(df: pd.DataFrame, window: str = "1h") -> list:

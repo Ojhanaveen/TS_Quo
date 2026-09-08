@@ -5,7 +5,11 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.analysis.signal_generator import aggregate_signals, lexicon_sentiment
+from src.analysis.signal_generator import (
+    aggregate_signals,
+    lexicon_sentiment,
+    _weighted_mean_and_ci,
+)
 
 
 def test_lexicon_sentiment_bullish():
@@ -45,3 +49,20 @@ def test_aggregate_signals_basic():
     assert len(signals) == 1
     assert signals[0].n_tweets == 3
     assert signals[0].mean_sentiment > 0  # 2 bullish, 1 bearish, bullish weighted higher
+
+
+def test_single_tweet_window_has_wide_ci_not_zero_width():
+    # A lone data point has zero variance around itself -- that must not
+    # be reported as a confident, zero-width interval.
+    import numpy as np
+
+    mean, lo, hi = _weighted_mean_and_ci(np.array([1.0]), np.array([5.0]))
+    assert mean == 1.0
+    assert hi - lo > 0.5  # visibly wide, not a degenerate point
+
+
+def test_ci_bounds_stay_within_sentiment_score_range():
+    import numpy as np
+
+    _, lo, hi = _weighted_mean_and_ci(np.array([1.0]), np.array([1.0]))
+    assert -1.0 <= lo <= hi <= 1.0
