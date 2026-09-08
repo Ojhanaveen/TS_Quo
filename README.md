@@ -63,6 +63,26 @@ cp .env.example .env   # fill in TWITTER_AUTH_TOKEN for a real run (optional)
 Requires Chrome/Chromium installed locally (Selenium drives it via
 `webdriver-manager`, no manual driver download needed).
 
+## Dashboard
+
+A local, no-login dashboard drives the whole pipeline from the browser --
+click through data collection, cleaning/dedup, storage, signal generation,
+and visualization one step at a time, with a live status (running,
+succeeded, or the exact error) on each step:
+
+```bash
+streamlit run app.py
+```
+
+Opens at `http://localhost:8501`. Pick a data source in the sidebar:
+synthetic sample data (no X account needed, always works), a live scrape
+(needs `TWITTER_AUTH_TOKEN` in `.env`), or loading whatever's already in
+`data/processed/`. Synthetic runs are written to `data/dashboard_output/`,
+kept separate from real scraped data in `data/processed/` on purpose --
+see the note at the top of `app.py`'s storage step. Ends with a summary
+(tweet/hashtag/engagement counts, dedup stats, charts, a data preview, and
+a CSV download) once you've run through the steps.
+
 ## Running
 
 **Generate the sample dataset and analysis (no browser/network needed):**

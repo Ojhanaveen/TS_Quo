@@ -5,8 +5,10 @@ venv/
 .env
 data/raw/*
 data/processed/*
+data/dashboard_output/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+!data/dashboard_output/.gitkeep
 logs/
 *.log
 .pytest_cache/
