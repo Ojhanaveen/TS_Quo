@@ -173,3 +173,14 @@ timestamped data rather than a stable demo artifact) -- the committed
 anyone cloning the repo can regenerate without needing their own X
 account. This log is the record that the same pipeline was also verified
 against real, live data.
+
+## Follow-up testing: scaling toward the full 2,000/hashtag target
+
+A later session pushed volume further to test whether the full
+2,000-tweets-per-hashtag target is reachable in one run, and found a real
+CLI bug (`--count` was silently split across hashtags) plus X's
+anti-scraping defenses escalating sharply at higher volume. Full evidence,
+root cause, the fix, and the recommended batched-collection approach to
+reach the full target are in
+[docs/FEASIBILITY.md](FEASIBILITY.md) -- that document is the direct
+answer to "can this system do the full assignment volume."

@@ -112,6 +112,9 @@ Full design rationale and the 10x-scale plan are in
 [docs/TECHNICAL_APPROACH.md](docs/TECHNICAL_APPROACH.md). Directions this
 could grow in beyond the assignment's scope, with honest trade-offs for
 each, are in [docs/FUTURE_ENHANCEMENTS.md](docs/FUTURE_ENHANCEMENTS.md).
+Whether the full 2,000-tweets-per-hashtag target is achievable with no
+paid API -- and the evidence and recommended approach for reaching it --
+is in [docs/FEASIBILITY.md](docs/FEASIBILITY.md).
 
 ## Verified against a real X account
 
@@ -132,6 +135,10 @@ use your own session token if you want to reproduce it.
   `NITTER_INSTANCES` in `.env` should be refreshed before a live run.
 - The sentiment lexicon is a hand-built term list, not a trained model --
   documented as a deliberate scope choice in `docs/TECHNICAL_APPROACH.md`.
-- The live-verification run collected 200 tweets (50/hashtag) rather than
-  the full 2000, as a bounded confidence check rather than the full
-  24-hour target volume -- see `docs/TESTING_LOG.md` for the exact numbers.
+- **The full 2,000-tweets-per-hashtag volume was not collected in one run,
+  by design.** Live testing showed X's anti-scraping defenses escalate
+  sharply somewhere between ~240 tweets across 4 hashtags (no issues) and
+  ~500 continuous tweets on one hashtag (heavy, escalating rate-limit
+  blocks) -- see `docs/FEASIBILITY.md` for the full evidence and the
+  recommended batched/scheduled collection approach to reach the full
+  target without a paid API.

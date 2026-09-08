@@ -134,17 +134,21 @@ class XSearchScraper:
 
     SEARCH_URL = "https://x.com/search?q=%23{tag}&src=typed_query&f=live"
 
-    def __init__(self, headless: bool = True, auth_token: str = ""):
+    def __init__(self, headless: bool = True, auth_token: str = "", ct0: str = ""):
         self.driver = _build_driver(headless)
         self.rate_limiter = RateLimiter()
         if auth_token:
-            self._inject_session(auth_token)
+            self._inject_session(auth_token, ct0)
 
-    def _inject_session(self, auth_token: str) -> None:
+    def _inject_session(self, auth_token: str, ct0: str = "") -> None:
         self.driver.get("https://x.com")
         self.driver.add_cookie(
             {"name": "auth_token", "value": auth_token, "domain": ".x.com"}
         )
+        if ct0:
+            self.driver.add_cookie(
+                {"name": "ct0", "value": ct0, "domain": ".x.com"}
+            )
         self.driver.refresh()
 
     def _is_login_wall(self) -> bool:
@@ -330,23 +334,32 @@ class NitterScraper:
         self.driver.quit()
 
 
-def collect_tweets(
+def collect_tweets_by_hashtag(
     hashtags: list = None,
-    target_count: int = None,
+    per_hashtag_count: int = None,
     headless: bool = None,
-) -> Iterator[RawTweet]:
-    """High-level entry point: tries X first, falls back to Nitter per hashtag."""
+) -> Iterator[tuple]:
+    """High-level entry point: tries X first, falls back to Nitter per hashtag.
+
+    Yields ``(hashtag, RawTweet)`` pairs one hashtag at a time so callers can
+    persist each hashtag's results as soon as it finishes, instead of buffering
+    the entire multi-hashtag run in memory until the end.
+    """
     hashtags = hashtags or config.HASHTAGS
-    target_count = target_count or config.TARGET_TWEET_COUNT
+    per_hashtag_count = per_hashtag_count or config.TARGET_TWEET_COUNT
     headless = config.HEADLESS if headless is None else headless
-    per_tag_target = max(1, target_count // max(1, len(hashtags)))
 
     if config.TWITTER_AUTH_TOKEN:
-        scraper = XSearchScraper(headless=headless, auth_token=config.TWITTER_AUTH_TOKEN)
+        scraper = XSearchScraper(
+            headless=headless,
+            auth_token=config.TWITTER_AUTH_TOKEN,
+            ct0=config.TWITTER_CT0,
+        )
         try:
             for tag in hashtags:
-                logger.info("Scraping #%s from X (target=%d)", tag, per_tag_target)
-                yield from scraper.scrape_hashtag(tag, per_tag_target)
+                logger.info("Scraping #%s from X (target=%d)", tag, per_hashtag_count)
+                for tweet in scraper.scrape_hashtag(tag, per_hashtag_count):
+                    yield tag, tweet
         finally:
             scraper.close()
     else:
@@ -354,7 +367,21 @@ def collect_tweets(
         scraper = NitterScraper(config.NITTER_INSTANCES, headless=headless)
         try:
             for tag in hashtags:
-                logger.info("Scraping #%s from Nitter (target=%d)", tag, per_tag_target)
-                yield from scraper.scrape_hashtag(tag, per_tag_target)
+                logger.info("Scraping #%s from Nitter (target=%d)", tag, per_hashtag_count)
+                for tweet in scraper.scrape_hashtag(tag, per_hashtag_count):
+                    yield tag, tweet
         finally:
             scraper.close()
+
+
+def collect_tweets(
+    hashtags: list = None,
+    target_count: int = None,
+    headless: bool = None,
+) -> Iterator[RawTweet]:
+    """Back-compat wrapper: total target_count split evenly across hashtags."""
+    hashtags = hashtags or config.HASHTAGS
+    target_count = target_count or config.TARGET_TWEET_COUNT
+    per_tag_target = max(1, target_count // max(1, len(hashtags)))
+    for _tag, tweet in collect_tweets_by_hashtag(hashtags, per_tag_target, headless):
+        yield tweet

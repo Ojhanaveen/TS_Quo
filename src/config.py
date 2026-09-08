@@ -16,6 +16,7 @@ for d in (DATA_RAW_DIR, DATA_PROCESSED_DIR, DATA_SAMPLE_DIR, LOG_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 TWITTER_AUTH_TOKEN = os.getenv("TWITTER_AUTH_TOKEN", "")
+TWITTER_CT0 = os.getenv("TWITTER_CT0", "")
 NITTER_INSTANCES = [
     u.strip() for u in os.getenv(
         "NITTER_INSTANCES", "https://nitter.net"
